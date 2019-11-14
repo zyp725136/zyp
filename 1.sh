@@ -7,3 +7,4 @@ p=${x:n:1}
 pass=$pass$p    
 done
 echo $pass
+#
