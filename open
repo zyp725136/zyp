@@ -1,0 +1,363 @@
+git服务器地址: git clone git://43.254.90.134/nsd1907.git
+KVM-虚拟化
+   kvm是linux的内核模块,他需要cpu的支持,采用硬件辅助虚拟化技术
+   qemu是虚拟化的仿真工具,通过ioctl与内核kvm交互完成对硬件的虚拟化支持
+   libvirt是虚拟化管理的借口和工具,提供用户端程序与用户交互
+KVM虚拟机的组成
+    内核虚拟化模块  kvm
+    系统设备仿真    qemu
+    虚拟机管理程序  libvirt
+   .xml文件,虚拟机配置声明文件           /etc/libvirt/qemu/
+   .img文件,磁盘镜像文件,虚拟机的硬盘   /var/lib/libvirt/images/
+安装虚拟化服务器平台,必备软件
+   qemu-kvm          为kvm提供底层仿真支持
+   libvirt-daemon    libvirt守护进程,管理虚拟机
+   libvirt-client    用户端软件,提供客户端管理命令
+   libvirt-daemon-driver-qemu  libvirtd连接qemu的驱动
+可选功能
+   virt-install       /系统安装工具
+   virt-manager       /图形管理工具
+   virt-v2v           /虚拟机迁移工具
+   virt-p2v           /物理机迁移工具
+virsh虚拟机管理
+    # virsh 控制指令 虚拟机名称
+            list [--all]         /列出虚拟机
+            start                /启动虚拟机
+            shutdown             /停止虚拟机
+            reboot               /重启虚拟机
+            destroy              /强制停止虚拟机
+            define               /根据xml文件创建虚拟机
+            undefine             /根据xml文件删除虚拟机
+            console              /连接虚拟机的控制台
+            edit                 /修改虚拟机的配置
+            autostart            /设置虚拟机开机自启
+            domiflist            /查看虚拟机网卡信息
+            domblklist           /查看虚拟机硬盘信息
+virsh虚拟网络管理
+    # virsh 控制指令 虚拟机交换机名称
+            net-list [--all]     /列出虚拟网路
+            net-start            /启动虚拟交换机
+            net-destroy          /强制停止虚拟交换机
+            net-define           /根据xml文件创建虚拟网路
+            net-undefine         /删除一个虚拟网路设备
+            net-edit             /修改虚拟交换机的配置
+            net-autostart        /设置虚拟交换机开机自启
+qemu-img虚拟机磁盘管理
+    磁盘格式: qcow2  raw  bdi  vmdk等等
+     qcow2: kvm默认 I/O效率较高  占用空间小 压缩 后端盘复用 快照
+       rwa: I/O效率高 占空间大
+    # qemu-img 控制指令 参数 块文件名称 大小
+            create               /创建一个磁盘
+            convert              /转换磁盘格式
+            info                 /查看磁盘信息
+            resize               /扩容磁盘空间
+    # qemu-img create -f 格式 磁盘路径 大小     /创建新的镜像盘文件
+    # qemu-img info 磁盘路径                      /查看镜像盘文件信息
+  使用后端盘文件创建前端盘镜像文件
+    # qemu-img create -b 后端盘路径 -f 格式 前端盘路径 
+COW-Copy On Write,写时复制
+    直接映射原始盘(后端盘)的数据内容
+    当数据有修改要求时,在修改之前自动将后端盘数据拷贝存入前段盘后进行修改
+    原始盘(后端盘)始终是只读的
+xml虚拟机配置文件管理
+    # virsh edit 虚拟机名称          /修改xml配置文件
+
+批量创建虚拟机
+    # vim /root/kvm.sh           /shell脚步
+#!/bin/bash
+if [ $# -eq 0 ];then
+  echo '请输入:/root/kvm.sh 虚拟机名称'
+else
+  qemu-img create -b /var/lib/libvirt/images/.node_base.qcow2 -f qcow2 $1.img 20G >/dev/null
+  cp /var/lib/libvirt/images/.node_base.xml /etc/libvirt/qemu/$1.xml >/dev/null
+  sed -i "s/node_base/$1/" /etc/libvirt/qemu/$1.xml >/dev/null
+  virsh define /etc/libvirt/qemu/$1.xml >/dev/null
+  virsh list --all
+fi
+
+virsh扩容磁盘
+    # virsh start 虚拟机           /启动虚拟机
+    # virsh domblklist 虚拟机     /查看磁盘信息
+  # virsh blockresize --path 磁盘文件.img --size 扩容大小G 虚拟机 
+                                         /扩容磁盘大小
+    # LANG=C                    /语言设置为英文(登录)
+    # lsblk                     /查看磁盘设备是否有多余空间(登录)
+    # growpart /dev/vda 1       /扩容第一个分区(登录)
+    # xfs_growfs /              /扩容根分区文件系统(登录)
+
+云计算
+    基于互联网的相关服务的增加,使用和付费模式
+    提供可用的.便捷的.按需的网路访问,进入可配置的计算资源共享池
+    能够快速提供资源,只需投入很少的管理工作或服务,供应商进行很少的交互
+    通常涉及通过互联网来提供动态易扩展且经常是虚拟化的资源
+IaaS-Infrastructure as a Serveice,基础设施即服务
+    提供给消费者的服务是对所有计算基础设施的利用
+    包括处理CPU.内存.储存.网络和其他基本的计算资源
+    用户能够部署和运行任意软件,包括操作系统和应用程序
+    通常分为3种用法: 公有云  私有云  混合云
+PaaS-Platform as a Service,平台即服务
+    以服务器平台或者开发环境作为服务进行提供
+    运营商所需提供的服务,不仅是单纯的基础平台,还针对该平台的技术支持服务
+    甚至针对该平台而进行的应用系统开发.优化等服务
+    简单地说,PaaS平台是指云环境中的应用基础设施服务,或是中间件即服务
+SaaS-Software as a Aervice,软件即服务
+    通过Internet提供软件的模式,厂商将应用软件统一部署在自己的服务器上
+    客户可以根据自己实际需求,通过互联网向厂商订购所需的应用软件服务
+    用户不用再购买软件,而是向供应商租用基于Web的软件,来管理企业经营活动
+    不用对软件进行维护,供应商会全权管理和维护软件
+    提供软件离线操作和本地数据储存
+知名云服务商
+    国外: 亚马逊AWS 微软Azure IBM-SCE+
+    国内: 华为云(基于Openstack) 阿里云 百度云 腾讯云
+Openstack
+    由NASA(美国国家航空航天局)和Rackspace合作研发并发起的项目
+   -Rackspace: 全球领先的托管服务器及云计算提供商，公司总部位于美国
+    是一套IaaS解决方案
+    是一个开源的云计算管理平台
+    以Apache许可为授权
+华为云产品基础介绍(web版)
+
+Openstack
+    由NASA(美国国家航空航天局)和Rackspace合作研发并发起的项目
+   -Rackspace: 全球领先的托管服务器及云计算提供商，公司总部位于美国
+    是一套IaaS解决方案
+    是一个开源的云计算管理平台
+    以Apache许可为授权
+Openstack主要组件
+   Horizon
+    - 用于管理Openstack各种服务的,基于web的管理接口
+    - 通过图形界面实现创建用户.管理网路.启动实例等操作
+   Keystone
+    - 为其他服务提供认证和授权的集中身份管理服务
+    - 提供集中的目录服务
+    - 支持多种身份认证模式,如密码认证.令牌认证.以及AWS(亚马逊web服务)登录
+    - 为用户和其他服务提供了SSO认证服务
+   Neutron
+    - 一种软件定义网络服务
+    - 用于创建网络.子网.路由器.管理浮动IP地址
+    - 可以实现虚拟交换机.虚拟路由器
+    - 可用于在项目中创建VPN
+   Cinder
+    - 为虚拟机管理储存卷的服务
+    - 为运行在Nova中的实例提供永久的块储存
+    - 可以通过快照进行数据备份
+    - 经常应用在实例储存环境中,如数据库文件
+   Glance
+    - 扮演虚拟机镜像注册的角色
+    - 允许用户为直接储存拷贝服务器镜像
+    - 这些镜像可以用于新建虚拟机的模板
+   Nova
+    - 在节点上用于管理虚拟机的服务
+    - 分布式的服务,能与Keystone交互实现认证,与Glance交互实现镜像管理 
+    - 被设计在标准硬件上,能够水平扩展
+    - 启动实例时,如果有则需要下载镜像
+   Swift
+    - 存储云组件
+    - 提供对象.文件系统存储
+   Quantum
+    - 网路管理组件
+
+
+部署Openstack服务
+构建环境: openstack(管理主机) eth0 192.168.1.10
+           node01(计算节点) eth0 192.168.1.11
+           node02(计算节点) eth0 192.168.1.12
+    # vim /etc/hosts            
+      192.168.1.10 openstack
+      192.168.1.11 node01
+      192.168.1.12 node02
+    # vim /etc/resolv.conf               /配置为真机DNS
+      nameserver 114.114.114.114
+    # vim /etc/chrony.conf               /配置NTP服务
+      server 192.168.1.254 iburst
+    # systemctl restart chronyd
+    # chronyc sources -v                 /查看时间是否同步
+配置yum仓库
+真机共享光盘yum源
+    # cd /var/ftp/
+    # mkdir RHEL7OSP-10
+    # mkdir RHEL7-extras
+    # vim /etc/fstab
+/linux-soft/04/openstack/RHEL7OSP-10.iso /var/ftp/RHEL7OSP-10 iso9660 defaults 0 0
+/linux-soft/04/openstack/RHEL7-extras.iso /var/ftp/RHEL7-extras iso9660 defaults 0 0
+    # mount -a
+    # lsblk
+三台虚拟机配置yum仓库
+    # vim /etc/yum.repos.d/local.repo 
+[local_repo]
+name=CentOS-$releasever - Base
+baseurl="ftp://192.168.1.254/centos-1804"
+enabled=1
+gpgcheck=1
+
+[RHEL7-extras]
+name=RHEL7-extras.ios
+baseurl="ftp://192.168.1.254/RHEL7-extras"
+enabled=1
+gpgcheck=0
+
+[RHEL7OSP-package]
+name=RHEL7OSP-package
+baseurl="ftp://192.168.1.254/RHEL7OSP-10/rhel-7-server-openstack-10-rpms"
+enabled=1
+gpgcheck=0
+
+[RHEL7OSP-devtools]
+name=RHEL7OSP-devtools
+baseurl="ftp://192.168.1.254/RHEL7OSP-10/rhel-7-server-openstack-10-devtools-rpms"
+enabled=1
+gpgcheck=0
+管理主机安装依赖软件包
+    # yum -y install python-setuptools
+计算节点安装依赖软件包
+    # yum -y install python-setuptools
+    # yum -y install qemu-kvm libvirt-daemon libvirt-client 
+                     libvirt-daemon-driver-qemu
+验证以下环境
+检查是否卸载firewalld和networkmanager服务
+    # rpm -qa | grep -i "firewall|networkmanager"
+检查配置主机网路参数为: 静态IP
+    # grep "BOOTPROTO" /etc/sysconfig/network-scripts/ifcfg-eth0
+检查主机名必须能够相互ping通
+    # ping node01  # ping node02  # ping openstack
+检查配置主机yum源(4个,共10670个包)
+    # yum repolist
+检查依赖包是否安装
+    # systemctl start libvirtd
+检查NTP服务器是否可用
+    # chronyc sources -v
+检查/etc/resolv.conf不能有search(搜索)开头的行
+    # cat /etc/resolv.conf
+
+管理主机安装openstack软件包
+    # yum -y install openstack-packstack
+使用packstack创建通用应答文件
+    # packstack --gen-answer-file=answer.ini /生成应答文件
+    # vim answer.ini                         /修改应答文件
+42 CONFIG_SWIFT_INSTALL=n                    /不使用Swift组件
+45 CONFIG_CEILOMETER_INSTALL=n               /关闭计费相关模块
+49 CONFIG_AODH_INSTALL=n                     /关闭计费相关模块
+53 CONFIG_GNOCCHI_INSTALL=n                  /关闭计费相关模块
+75 CONFIG_NTP_SERVERS=192.168.1.254          /NTP服务器
+98 CONFIG_COMPUTE_HOSTS=192.168.1.11         /计算节点主机
+102 CONFIG_NETWORK_HOSTS=192.168.1.10-11     /安装网路配置主机
+330 CONFIG_KEYSTONE_ADMIN_USERNAME=admin     /管理员名称
+333 CONFIG_KEYSTONE_ADMIN_PW=a               /管理员密码
+840 CONFIG_NEUTRON_ML2_TYPE_DRIVERS=flat,vxlan      /网络驱动类型
+910 CONFIG_NEUTRON_OVS_BRIDGE_MAPPINGS=physnet3:br-ex /交换机名称
+921 CONFIG_NEUTRON_OVS_BRIDGE_IFACES=br-ex:eth0  /交换机连接的网卡
+1179 CONFIG_PROVISION_DEMO=n                  /是否演示使用和测试
+通过应答文件一键部署openstack
+    # packstack --answer-file=answer.ini
+    # ifconfig                                 /查看网络信息
+    # cat /etc/sysconfig/network-scripts/ifcfg-br-ex  /交换机信息
+    # cat /etc/sysconfig/network-scripts/ifcfg-eth0
+         DEVICETYPE=ovs                        /设备类型为ovs
+         TYPE=OVSPort                          /类型为ovs一个接口
+         OVS_BRIDGE=br-ex                      /ovs网桥的端口
+    # ovs-vsctl show                           /查看ovs配置信息
+    # systemctl list-unit-files | grep l3  /路由器neturonl3-agent
+Horizon BUG处理
+    # vim /etc/httpd/conf.d/15-horizon_vhost.conf   /修改http配置
+       36   WSGIApplicationGroup  %{GLOBAL}         /添加此行配置
+    # apachectl -t                                  /验证配置文件
+    # systemctl restart  httpd
+Web页面登录测试: http://192.168.1.10
+命令行登录
+      keystonerc_admin                        /登录环境文件
+    # source keystonerc_admin                 /使用登录环境文件登录
+    # openstack user list                     /查看openstack用户
+
+DocKer容器
+什么是容器
+    容器技术已经成为应用程序封装和交付的核心技术
+    容器技术的核心有以下几个内核技术组成:
+       Cgroups(Control Groups)资源管理
+       NameSpace进程隔离
+       SELinux安全
+    由于是在物理机上实施隔离,启动一个容器,可以像启动一个进程一样快速
+什么是docker
+    一套完整的容器管理系统
+    提供一组命令,更加方便直接的使用容器技术,不需要过多关心底层内核技术
+docker优点
+    相比于传统的虚拟化技术,容器更加简洁高效
+    传统虚拟机需要给每个VM安装操作系统
+    容器使用的共享公共库和程序
+docker缺点
+    容器的隔离性没有虚拟化强
+    共用Linux内核,安全性有先天缺陷
+   SELinux难以驾驭
+    监控容器和容器排错是挑战
+部署docker
+构建环境: docker1 eth0 192.168.1.31
+        docker1 eth0 192.168.1.32
+          64位操作系统
+        RHEL7版本及以上
+          关闭防火墙
+          配置yum源
+    # vim /etc/yum.repos.d/local.repo 
+      [RHEL7-extras]
+      name=RHEL7-extras
+      baseurl=ftp://192.168.1.254/RHEL7-extras
+      enabled=1
+      gpgcheck=0
+安装docker软件包
+    # yum -y install docker
+    # systemctl start docker
+    # systemctl enable docker
+DocKer镜像
+    在docker中容器是基于镜像启动的
+    镜像是启动容器的核心
+    镜像采用分层设计
+    使用快照的cow技术,确保底层数据不丢失
+Docker hub镜像仓库
+   https://hub.docker.com
+   Docker官方提供公共镜像的仓库(Registry)
+    # ls -i /etc/passwd                   /查看文件id
+    # docker search busybox               /搜索镜像仓库busybox
+    # docker pull docker.io/busybox       /下载镜像busybox
+    # docker push docker.io/busybox       /上传镜像busybox
+    # docker images                       /查看所有镜像
+        镜像仓库名称   镜像标签   镜像ID   创建时间   大小
+    # docker save 名称:标签 -o busybox.tar   /导出镜像busybox.tar
+    # docker load -i busybox.tar          /导入镜像到仓库
+    # docker rmi 名称:标签                       /删除镜像
+    # docker tag 镜像名称:标签 新名称:标签       /复制镜像并修改名称:标签
+    # docker history 镜像名称:标签              /查看镜像历史
+    # docker inspect 镜像名称:标签              /查看镜像底层信息
+导入镜像到仓库
+    # scp centos.tar nginx.tar redis.tar ubuntu.tar 
+      root@192.168.1.32:/root/
+    # scp centos.tar nginx.tar redis.tar ubuntu.tar 
+      root@192.168.1.31:/root/
+    # docker load -i centos.tar
+    # docker load -i nginx.tar 
+    # docker load -i redis.tar 
+    # docker load -i ubuntu.tar 
+    # docker images 
+    # for i in *.tar ;do docker load -i $i ;done
+启动并进入容器
+    # docker run -it 镜像名称:标签 /bin/bash   /创建并启动容器
+             run           /创建并启动容器
+             -it           /交互式终端,前台运行  echo $-
+             /bin/bash     /交互的解释器,不添加默认使用 /bin/sh
+                 当标签为: latest 可以省略不写
+             -itd          /后台运行容器,退出不会关闭容器
+    # docker run -it docker.io/centos /bin/bash  /启动容器
+    # docker run -it 76d6bc25b8a5 /bin/bash      /ID号启动
+    # docker ps                        /查看正在运行的容器
+    # docker ps -a                     /查看所有容器列表
+    # docker ps -aq                    /仅查看所有容器ID
+    # docker start 容器ID               /开启容器
+    # docker restart 容器ID             /重启容器
+    # docker stop 容器ID                /关闭容器
+    # docker attach 容器ID              /进入容器(链接上帝进程)
+                       -- 退出时使用: ctrl+p+q  /退出不会关闭容器
+    # docker exec -it 容器ID /bin/bash  /进入容器,exit不会关闭容器
+    # docker top 容器ID                 /查看容器进程列表
+    # docker inspect 容器ID             /查看容器底层信息
+    # docker rm 容器ID                  /删除容器
+    # docker rm $(docker stop 容器ID)   /停止并删除容器
+    # docker rm $(命令的结果)            /括号内可以用docker命令
+    # echo $$                           /查看当前进程pid号
+
