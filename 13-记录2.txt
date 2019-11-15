@@ -1,0 +1,185 @@
+playbook(ansible脚本)
+json语法格式
+yaml语法格式
+jinja2模板语法格式
+    基于python的模板引擎,用于解析playbook
+    过滤器: http://docs.jinkan.org/docs/jinja2/templates.html
+
+playbook语法格式
+    案例1: # ansible all -m ping
+    # vim ping.yml
+---
+- name: test ping
+  hosts: 
+    - web
+    - db
+    - other
+  remote_user: root
+  tasks: 
+    - ping:
+    - ping:
+    案例2: 所有web主机安装apache,修改配置文件监听端口为8080
+           设置默认主页 hello world,启动服务,设置开机自启
+    # echo "hello world" > index.html
+    # vim apache.yml
+---
+- name: test apache
+  hosts: web
+  tasks: 
+    - name: install httpd
+      yum: 
+        name: httpd 
+        state: installed
+    - name: set port 8080
+      lineinfile: 
+        path: /etc/httpd/conf/httpd.conf 
+        regexp: ^Listen
+        line: Listen 8080
+    - name: set indix.html
+      copy: 
+        src: /root/index.html
+        dest: /var/www/html/
+    - name: start httpd
+      service: 
+        name: httpd 
+        state: started 
+        enabled: yes
+
+playbook-变量
+    案例1: 使用变量给web主机添加用户l4,设置密码123
+    # vim user.yml
+---
+- name: add user
+  hosts: web
+  vars:
+    username: l4                          /设置变量
+  tasks:
+    - name: add user "{{ username }}"
+      user:
+        name: "{{ username }}"
+        group: users
+    # password: "{{ 'abc' | password_hash('sha512') }}" /加密
+    # password: abc                                     /明文
+    - name: set password
+      shell: echo 123|passwd --stdin "{{ username }}"   
+变量过滤器password_hash
+    "{{ '密码' | password_hash('加密方式') }}"
+命令行添加变量:  -e 参数
+    json格式:
+# ansible-playbook user.yml -e '{"username":"plj","pwd":"aa"}'
+    yaml格式: 需先编辑一个yaml格式文件,命令行用@读取
+    # vim args.yml
+         ---
+      username: "nb"
+      pwd: "123456"
+    # ansible-playbook user.yml -e @args.yml
+
+错误的处理: 默认(False)情况判断$?,如果值不为0就停止执行
+            但某些情况我们需要忽略错误继续执行
+    ignore_errors: True|False
+          True:  表示忽略错误继续执行
+          False: 表示遇到错误就停止执行
+    案例: 创建缓存目录,然后重启httpd服务
+          解决当目录存在,plabook默认会报错,并停止配置文件以下操作
+    # vim cache.yml
+---
+- hosts: web
+  tasks:
+    - shell: mkdir /tmp/cache
+      ignore_errors: True
+    - service:
+        name: httpd
+        state: restarted
+
+tags
+    给指定的任务定义一个调用标识
+    配置文件用法   tags: 标识名称
+    命令行执行      -t 标识名称
+handlers
+    通过notify:定义一个触发名称来关注资源是否变化
+    当标识的notify任务发生变时,则触发该操作
+   notify调用的是handlers段name定义的触发名称,必须一致,否则不会触发
+    配置文件用法    notify: 触发名称           /等级等于模块等级
+                     模块: 参数
+            handlers:                   /注意: 等级高于模块等级
+              - name: 触发名称
+    命令行执行 -t 标识名称(tags) 的时候如果设置了notify会触发handlers
+   <<案例>>: 为web主机设置2个调用标识分别为:  修改httpd默认网页
+                                                   重启httpd服务
+               监控httpd默认网站文件
+               当httpd默认网页变化的时候,通过handlers重启hddpd服务
+    # vim webconf.yml
+---
+- hosts: web
+  tasks:
+    - name: modify httpd.conf
+      copy:
+        src: httpd.conf
+        dest: /etc/httpd/conf/httpd.conf
+        owner: root
+        group: root
+        mode: 0644
+      tags: update_conf                  /定义调用标识
+      notify: reload httpd               /定义触发名称
+    - name: modify index.html
+      copy:
+        src: index.html
+        dest: /var/www/html/index.html
+        owner: apache
+        group: apache
+        mode: 0644
+      tags: update_index                /定义调用标识
+  handlers:                             /定义handlers
+    - name: reload httpd                /触发定义notify
+      service:
+        name: httpd
+        state: restarted
+
+when
+    进行条件判断,满足特定的条件后再触发某一项操作,或终止某个行为
+    远程中的系统变量facts作为when的条件,可以通过setup模块查看
+    配置文件用法  when: 条件格式               /注意: 等级等于模块等级
+register
+    当判断前一个命令的执行结果去处理后面的操作
+    需要register来保存前一个命令的返回状态,在后面进行调用
+    配置文件用法  regisrer: 名称(转换为json的数组,保存在本地)  /等于模块
+   <<案例>>: 当主机负载标准输出值大于0.7的时候,停止httpd服务
+   # vim load.yml
+---
+- hosts: web
+  tasks:
+    - shell: uptime | awk '{printf("%.2f",$(NF-2))}' /标准输出值
+      register: result
+    - name: stop httpd
+      service:
+        name: httpd
+        state: stopped
+      when: result.stdout | float > 0.7  /条件:标准输出的值大于0.7
+    # awk 'BEGIN{while(1){}}' &          /死循环
+    # uptime                             /查看主机负载
+
+with_items
+    是playbook标准循环,可以用于迭代一个列表,通过{{item}}获取每次迭代的值
+    配置文件用法   with_items: ["值","值",....]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
