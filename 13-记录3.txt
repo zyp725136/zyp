@@ -1,0 +1,5 @@
+分布式ELK平台
+    Elasticsearch: 负责日志检索和储存
+    Logstash: 负责日志的收集和分析.处理      
+    Kibana: 负责日志的可视化
+
